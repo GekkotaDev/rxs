@@ -1,7 +1,7 @@
 name: rxs
 description: A simple library for composing states inspired by the reactivity system of Solid.js.
 version: 0.0.1
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/gekkotadev/rxs.git
 
 environment:
   sdk: ^3.0.0
