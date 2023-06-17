@@ -7,8 +7,8 @@ class EffectWriteError {
   EffectWriteError(Effect effect) {
     throw Exception("""
 A signal is being written to within the effect ${effect.toString()} but the
-signal was declared with the setting EffectMutation.error. It is unsafe to
-write to this signal inside an effect.
+signal was declared with the setting EffectMutation.error. It is unsafe to write
+to this signal inside an effect.
 """);
   }
 }
@@ -30,6 +30,9 @@ enum EffectMutation {
   /// to in an [effect].
   error,
 }
+
+/// Derives the next value from the previous value.
+typedef DeriveValue<T> = T Function(T previousValue);
 
 /// Access the current state of the [signal].
 typedef Accessor<T> = T Function();
@@ -99,4 +102,15 @@ Signal<S> signal<S>(S value,
   }
 
   return (getState, setState);
+}
+
+/// Derive the next value of a [Signal] from the previous value.
+///
+/// Set the next value of a [Signal] by reusing the previous value of the given
+/// [Signal], giving [derive] a reference to the [signal] and a function that
+/// calculates on how to get the [derivedValue]. This may be used when updating
+/// a [signal] that keeps track of a mutable object as its state for example.
+derive<S>(Signal<S> signal, DeriveValue<S> derivedValue) {
+  final (getter, setter) = signal;
+  setter(derivedValue(getter()));
 }
