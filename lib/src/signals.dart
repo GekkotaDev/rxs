@@ -52,7 +52,7 @@ typedef Signal<T> = (Accessor<T>, Setter<T>);
 Signal<S> signal<S>(S value,
     {bool forceUpdates = false,
     EffectMutation effectMutation = EffectMutation.yes}) {
-  final state = BehaviorSubject.seeded(value);
+  final state = BehaviorSubject<S>.seeded(value);
   final Set<Function()> dependents = {};
 
   S getState() {
@@ -70,6 +70,7 @@ Signal<S> signal<S>(S value,
       // avoid infinite loops by mutating data the effect is dependent on.
       case EffectMutation.yes:
         null;
+        break;
 
       // Prevent this state to be written to in an effect. Select this option if
       // it is safe to assume continued operation when an attempt to write to

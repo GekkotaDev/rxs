@@ -1,7 +1,7 @@
 import "package:rxdart/rxdart.dart";
 
 /// A side effect of state change.
-typedef Effect = Function() Function(dynamic);
+typedef Effect = Function() Function(BehaviorSubject);
 
 /// A list of [Effect]s.
 typedef Effects = List<Effect>;
