@@ -16,3 +16,7 @@
   - Core hooks now return classes instead of functions.
 - Renamed existing APIs.
 - Additional hooks.
+
+## 1.0.1
+
+- Fixed example

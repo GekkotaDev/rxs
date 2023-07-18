@@ -1,6 +1,6 @@
 name: rxs
 description: A simple library for reactive state management with a minimal yet familiar set of APIs.
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/gekkotadev/rxs.git
 
 environment:
