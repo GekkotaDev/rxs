@@ -1,35 +1,25 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# rxs
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages). 
-
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-library-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages). 
--->
-
-## State composition, simplified
-
-Compose states and streams with ease, inspired by Solid.js and the concept
-of signals.
-
-The goals this project aims for are…
+A simple reactive state management library with a minimal yet familiar API. The
+goals of this library are…
 
 - Be simple to learn
 - Be simple to use
 - Be simple to implement
 
-This project does not aim to be a state management library itself but rather to
-complement them, particularly those that primarily use streams. What this
-project aims for is to make the composition of state simpler.
+## Prior Works
 
-## Additional ifnromation
+This library would not have been made without the inspiration or otherwise from
+existing libraries/frameworks. Special thanks to
 
-This project started out to extract the hooks from `rxservice` into its own
-separate, reusable package independent of services. The extraction eventually
-became it's own package.
+- [Solid.js](https://www.solidjs.com/) which has been used as a reference on
+the implementation of this library, and the biggest inspiration so far.
+- [Angular](https://angular.io/guide/signals) for providing the idea of using
+classes within this library's implementation of signals, and encouraged the
+usage of classes to take advantage of Dart's type system.
+- [S.js](https://github.com/adamhaile/S) which has provided extra inspiration
+for the implementation of this library.
 
-Licensed under the BSD 3 Clause license.
+## Additional Information
+
+Licensed under the terms of the BSD 3 Clause license.
