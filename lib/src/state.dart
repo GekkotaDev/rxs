@@ -1,117 +1,117 @@
 import "package:rxdart/rxdart.dart";
 
-import "effects.dart";
+import "compute.dart";
+import "types.dart";
 
-/// Unsafe write with a [Setter].
-class EffectWriteError {
-  EffectWriteError(Effect effect) {
-    throw Exception("""
-A signal is being written to within the effect ${effect.toString()} but the
-signal was declared with the setting EffectMutation.error. It is unsafe to write
-to this signal inside an effect.
-""");
-  }
-}
-
-/// Mark if a signal is allowed to write in an [effect] or disallowed.
-enum EffectMutation {
-  /// Allow this state to be written in an [effect]. This is the default
-  /// setting as [signal] assumes that the user is responsible enough to
-  /// avoid infinite loops by mutating data the effect is dependent on.
-  yes,
-
-  /// Prevent this state to be written to in an [effect]. Select this option if
-  /// it is safe to assume continued operation when an attempt to write to
-  /// this state is made by ignoring any writes to it in an [effect].
-  no,
-
-  /// Prevent this state to be written to in an [effect]. Select this option if
-  /// it is **un**safe to assume continued operation when this state is written
-  /// to in an [effect].
-  error,
-}
-
-/// Derives the next value from the previous value.
-typedef DeriveValue<T> = T Function(T previousValue);
-
-/// Access the current state of the [signal].
-typedef Accessor<T> = T Function();
-
-/// Set the state of the [signal].
-typedef Setter<T> = void Function(T value);
-
-/// A [signal].
-typedef Signal<T> = (Accessor<T>, Setter<T>);
-
-/// Mark a [value] as reactive.
+/// [State] represents any data that should be remembered during the lifetime of
+/// the application's runtime, the [State] classes themselves functioning as a
+/// container that enables `rxs` to perform its magic. The value of the wrapped
+/// data is subject to change over time, but will not change its type over time
+/// unless specified as dynamically typed.
 ///
-/// Mark the given [value] as reactive to explicitly allow it to be observed by
-/// [effect]s. This returns a [Record] of type [Signal] which exposes an
-/// [Accessor] that returns the [value] itself and a [Setter] that reactively
-/// updates the state and any side effects.
-Signal<S> signal<S>(S value,
-    {bool forceUpdates = false,
-    EffectMutation effectMutation = EffectMutation.yes}) {
-  final state = BehaviorSubject<S>.seeded(value);
-  final Set<Function()> dependents = {};
+/// The data being represented can be of any type and of any complexity. It can
+/// be as atomic as a [bool]ean value, or as coarse as a complex class. To read
+/// this data, the [State] object must be called.
+sealed class State<T> implements Model {
+  /// Read the value of the data.
+  T call();
 
-  S getState() {
-    final effect = owner;
-
-    if (effect != null) dependents.add(effect(state));
-
-    return state.value;
-  }
-
-  void setState(S value) {
-    switch (effectMutation) {
-      // Allow this state to be written in an effect. This is the default
-      // setting as [signal] assumes that the user is responsible enough to
-      // avoid infinite loops by mutating data the effect is dependent on.
-      case EffectMutation.yes:
-        null;
-        break;
-
-      // Prevent this state to be written to in an effect. Select this option if
-      // it is safe to assume continued operation when an attempt to write to
-      // this state is made by ignoring any writes to it in an effect.
-      case EffectMutation.no:
-        final effect = owner;
-        if (effect != null) return;
-
-      // Prevent this state to be written to in an effect. Select this option if
-      // it is unsafe to assume continued operation when this state is written
-      // to in an effect.
-      case EffectMutation.error:
-        // TODO: Dedicated error type for writing to effects.
-        final effect = owner;
-        if (effect != null) throw EffectWriteError(effect);
-
-      // The options .no and .error are typically selected as a way to prevent
-      // an infinite loop from occuring.
-    }
-
-    switch (forceUpdates) {
-      case true:
-        state.add(value);
-      case false:
-        (value == state.value) ? null : state.add(value);
-    }
-
-    // ignore: avoid_function_literals_in_foreach_calls
-    dependents.forEach((sideEffect) => sideEffect());
-  }
-
-  return (getState, setState);
+  /// The value of the data to remember.
+  T get state;
 }
 
-/// Derive the next value of a [Signal] from the previous value.
-///
-/// Set the next value of a [Signal] by reusing the previous value of the given
-/// [Signal], giving [derive] a reference to the [signal] and a function that
-/// calculates on how to get the [derivedValue]. This may be used when updating
-/// a [signal] that keeps track of a mutable object as its state for example.
-derive<S>(Signal<S> signal, DeriveValue<S> derivedValue) {
-  final (getter, setter) = signal;
-  setter(derivedValue(getter()));
+/// Data that only provides the user direct access to reading its value; it does
+/// not provide the user direct access to writing its value.
+final class ReadOnlyState<T> implements State {
+  final WritableState<T> _state;
+
+  /// Wrap any [WritableState] as a [ReadOnlyState].
+  const ReadOnlyState(WritableState<T> this._state);
+
+  @override
+  T call() => state;
+
+  @override
+  T get state {
+    return _state.state;
+  }
 }
+
+/// Data that allows the user both direct read and write accesss to its value.
+final class WritableState<T> implements State {
+  final _state = BehaviorSubject<T>();
+  final Set<Computation> _dependents = {};
+
+  /// The value of the data as a [ValueStream].
+  late final $ = _state.stream;
+
+  /// The initial value of the data.
+  WritableState([T? value]) {
+    if (value != null) _state.add(value);
+  }
+
+  @override
+  T call() => state;
+
+  @override
+  T get state {
+    final computation = parentComputation;
+
+    if (computation != null) _dependents.add(computation);
+
+    return _state.value;
+  }
+
+  /// Update the value of the data.
+  set state(T value) {
+    _state.add(value);
+    _updateDependents();
+  }
+
+  /// Inform the computations that they should re-run with the new dependencies'
+  /// values.
+  void _updateDependents() {
+    /*
+      We keep a copy of the current dependents that represents the next state of
+      the dependents. We do this to simplify the mental model of iterating over
+      the current dependents whose length may vary (such as through the removal
+      of a dependent).
+     */
+    final nextDependents = {..._dependents};
+
+    _dependents.forEach((computation) {
+      if (computation.cleanup) {
+        nextDependents.remove(computation);
+        return;
+      }
+
+      computation();
+    });
+
+    if (_dependents.length != nextDependents.length) {
+      _dependents.clear();
+      _dependents.addAll(nextDependents);
+    }
+  }
+
+  /// Set the value of the data. The new [value] must be of the same type as the
+  /// previous [value].
+  void set(T value) => state = value;
+
+  /// [update] the data with a new value by deriving it from the previous value.
+  /// The new value of the data is considered to be a different object compared
+  /// to the previous value; if it is important that both of them must stay as
+  /// the same object, consider to [mutate] the value instead.
+  void update(T Function(T) derivation) => state = derivation(state);
+
+  /// Change the value of the data without replacing the previous state with the
+  /// new state. This method must not be used for data that is immutable such as
+  /// primitive data types (for example: [String]s, [num]s, [bool]s, etc.).
+  void mutate(void Function(T) mutator) {
+    mutator(state);
+    _updateDependents();
+  }
+}
+
+/// Declare the given [data] as [State]ful.
+WritableState<T> state<T>([T? data]) => WritableState<T>(data);
