@@ -1,65 +1,101 @@
 import "package:test/test.dart";
-import "package:rxs/rxs.dart";
+
+import "package:rxs/core.dart";
 
 void main() {
-  test("updates signal", () {
-    final (count, setCount) = signal(0);
+  test("sets state", () {
+    final count = state(0);
+    expect(count(), 0);
 
-    assert(count() == 0);
-
-    setCount(count() + 505);
-
-    assert(count() == 505);
+    count.set(42);
+    expect(count(), 42);
   });
 
-  test("composes signals", () {
-    final (countA, setCountA) = signal(0, effectMutation: EffectMutation.error);
-    final (countB, setCountB) = signal(0, effectMutation: EffectMutation.error);
-    final countC = stream(() => countA() + countB());
+  test("updates state", () {
+    final array = state(["apple"]);
+    expect(array(), ["apple"]);
 
-    assert(countC.value == 0);
-
-    setCountA(6);
-    assert(countC.value == 6);
-
-    setCountB(4);
-    assert(countC.value == 10);
+    array.update((array) => array + ["banana"]);
+    expect(array(), ["apple", "banana"]);
   });
 
-  test("updates effects", () {
-    final (countA, setCountA) = signal(0, effectMutation: EffectMutation.error);
-    final (countB, setCountB) = signal(0, effectMutation: EffectMutation.error);
-    final (countC, setCountC) = signal(0);
+  test("mutates state", () {
+    final array = state([]);
+    expect(array(), []);
 
-    effect(() => setCountC(countA() + countB()));
-
-    assert(countC() == 0);
-
-    setCountA(6);
-    assert(countC() == 6);
-
-    setCountB(4);
-    assert(countC() == 10);
+    array.mutate((array) => array.add("dart"));
+    expect(array(), ["dart"]);
   });
 
-  test("is uneffected", () {
-    final (countA, setCountA) = signal(6, effectMutation: EffectMutation.error);
-    final (countB, setCountB) = signal(0, effectMutation: EffectMutation.error);
-    final (countC, setCountC) = signal(0);
+  group("computes ", () {
+    test("once", () {
+      final addend = state(0);
+      final augend = state(0);
+      final sum = state<int>();
 
-    assert(countC() == 0);
+      compute(() => sum.set(addend() + augend()));
 
-    effect(() {
-      final count = untracked(() => countA());
-      setCountC(count + countB());
+      expect(sum(), 0);
+      addend.set(6);
+      expect(sum(), 6);
+      augend.set(4);
+      expect(sum(), 10);
     });
 
-    assert(countC() == 6);
+    test("with a reference", () {
+      final addend = state(0);
+      final augend = state(0);
+      final sum = state<int>();
 
-    setCountA(10);
-    assert(countC() == 6);
+      compute(() => sum.set(addend() + ref(augend)));
 
-    setCountB(6);
-    assert(countC() == 16);
+      expect(sum(), 0);
+      augend.set(4);
+      expect(sum(), 0);
+      addend.set(6);
+      expect(sum(), 10);
+    });
+
+    test("with explicit dependencies", () {
+      final addend = state(0);
+      final augend = state(0);
+      final sum = state<int>();
+
+      compute(() => sum.set(on(
+            (addend: addend(), augend: augend()),
+            (dependencies) => dependencies.addend + dependencies.augend,
+          )));
+
+      expect(sum(), 0);
+      addend.set(6);
+      expect(sum(), 6);
+      augend.set(4);
+      expect(sum(), 10);
+    });
+
+    test("and cleans up", () {
+      final clean = state(false);
+      final count = state(0);
+
+      final counter = compute(() {
+        while (count() < 10) {
+          count.update((count) => count + 1);
+        }
+
+        return () => clean.set(true);
+      });
+
+      expect(count(), 10);
+      expect(clean(), false);
+
+      count.set(5);
+      expect(count(), 10);
+
+      counter.dispose();
+
+      count.set(5);
+      expect(count(), 5);
+      expect(clean(), true);
+    });
   });
 }
