@@ -20,3 +20,7 @@
 ## 1.0.1
 
 - Fixed example
+
+## 2.0.0
+
+- Rewritten implementation from scratch.
