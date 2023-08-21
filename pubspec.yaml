@@ -1,6 +1,6 @@
 name: rxs
-description: A simple library for reactive state management with a minimal yet familiar set of APIs.
-version: 1.0.1
+description: Another simple reactive state management library for Dart and Flutter applications.
+version: 2.0.0
 repository: https://github.com/gekkotadev/rxs.git
 
 environment:
@@ -8,6 +8,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
+  meta: ^1.9.1
   rxdart: ^0.27.7
   # path: ^1.8.0
 
