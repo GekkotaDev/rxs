@@ -1,20 +1,18 @@
 import "package:rxs/hooks.dart";
-import "package:rxs/core.dart";
 
 void main() {
-  final hours = state(00);
-  final minutes = state(00);
-  final seconds = state(00);
+  final hours = state.be(00);
+  final minutes = state.be(00);
+  final seconds = state.be(00);
 
-  final time = compose(() => "[${hours()}:${minutes()}:${seconds()}]");
+  final time = state.from(() => "[${hours()}:${minutes()}:${seconds()}]");
 
-  final message = state("Application booted.");
+  final message = state.be("Application booted.");
 
-  final logger = compute(() {
-    print("${time()} ${message()}");
-
-    return () => print("Console logger disabled.");
-  });
+  final logger = state.from(
+    () => print("${time()} ${message()}"),
+    onDereference: () => print("Console logger disabled"),
+  );
 
   logger;
 }
