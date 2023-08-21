@@ -1,2 +1,2 @@
-export "hooks/compose.dart";
-export "hooks/managed.dart";
+export "hooks/factory.dart";
+export "hooks/reducer.dart";

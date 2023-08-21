@@ -1,117 +1,169 @@
+import "package:meta/meta.dart";
 import "package:rxdart/rxdart.dart";
 
-import "compute.dart";
-import "types.dart";
+import "events.dart";
+import "context.dart";
 
-/// [State] represents any data that should be remembered during the lifetime of
-/// the application's runtime, the [State] classes themselves functioning as a
-/// container that enables `rxs` to perform its magic. The value of the wrapped
-/// data is subject to change over time, but will not change its type over time
-/// unless specified as dynamically typed.
-///
-/// The data being represented can be of any type and of any complexity. It can
-/// be as atomic as a [bool]ean value, or as coarse as a complex class. To read
-/// this data, the [State] object must be called.
-sealed class State<T> implements Model {
-  /// Read the value of the data.
-  T call();
+/// Lifecycle hook when state is read.
+typedef OnAccess = void Function(StateNotification? notification)?;
 
-  /// The value of the data to remember.
-  T get state;
-}
+/// Lifecycle hook when state is notified.
+typedef OnNotify<Value> = void Function(
+    StateNotification notification, Value state,
+    {required bool lazy})?;
 
-/// Data that only provides the user direct access to reading its value; it does
-/// not provide the user direct access to writing its value.
-final class ReadOnlyState<T> implements State {
-  final WritableState<T> _state;
+/// [State] with read *and* write access.
+class WritableState<Value> implements State<Value> {
+  /// A handle to the [StateContext].
+  final StateContext<Value> ctx = StateContext(
+    $: BehaviorSubject(),
+    children: {},
+  );
 
-  /// Wrap any [WritableState] as a [ReadOnlyState].
-  const ReadOnlyState(WritableState<T> this._state);
+  /// Event received from a parent state.
+  @protected
+  var notification = null;
 
-  @override
-  T call() => state;
-
-  @override
-  T get state {
-    return _state.state;
-  }
-}
-
-/// Data that allows the user both direct read and write accesss to its value.
-final class WritableState<T> implements State {
-  final _state = BehaviorSubject<T>();
-  final Set<Computation> _dependents = {};
-
-  /// The value of the data as a [ValueStream].
-  late final $ = _state.stream;
-
-  /// The initial value of the data.
-  WritableState([T? value]) {
-    if (value != null) _state.add(value);
+  /// [State] with read *and* write access.
+  ///
+  /// Optionally pass the initial [value] of the state.
+  WritableState([Value? value]) {
+    if (value is Value) ctx.$.add(value);
   }
 
-  @override
-  T call() => state;
+  @protected
+  get state {
+    final currentSubscriber = ctx.subscriber.current;
+    if (currentSubscriber != null) ctx.addChild(currentSubscriber);
 
-  @override
-  T get state {
-    final computation = parentComputation;
-
-    if (computation != null) _dependents.add(computation);
-
-    return _state.value;
+    return ctx.$.value;
   }
 
-  /// Update the value of the data.
-  set state(T value) {
-    _state.add(value);
-    _updateDependents();
+  /// The value of the state.
+  @protected
+  set state(Value value) {
+    if (value == ctx.$.valueOrNull) return;
+
+    ctx.$.add(value);
+    ctx.notify(StateUpdate());
   }
 
-  /// Inform the computations that they should re-run with the new dependencies'
-  /// values.
-  void _updateDependents() {
-    /*
-      We keep a copy of the current dependents that represents the next state of
-      the dependents. We do this to simplify the mental model of iterating over
-      the current dependents whose length may vary (such as through the removal
-      of a dependent).
-     */
-    final nextDependents = {..._dependents};
+  call() => state;
 
-    _dependents.forEach((computation) {
-      if (computation.cleanup) {
-        nextDependents.remove(computation);
-        return;
-      }
+  @protected
+  void notify(StateNotification notification) {}
 
-      computation();
-    });
+  /// Directly set the new [value]. Must be of the same type
+  void set(Value value) => state = value;
 
-    if (_dependents.length != nextDependents.length) {
-      _dependents.clear();
-      _dependents.addAll(nextDependents);
-    }
-  }
+  /// Update the state based on the current state. A [setter] must be provided.
+  void update(StateUpdater<Value> setter) => state = setter(state);
 
-  /// Set the value of the data. The new [value] must be of the same type as the
-  /// previous [value].
-  void set(T value) => state = value;
-
-  /// [update] the data with a new value by deriving it from the previous value.
-  /// The new value of the data is considered to be a different object compared
-  /// to the previous value; if it is important that both of them must stay as
-  /// the same object, consider to [mutate] the value instead.
-  void update(T Function(T) derivation) => state = derivation(state);
-
-  /// Change the value of the data without replacing the previous state with the
-  /// new state. This method must not be used for data that is immutable such as
-  /// primitive data types (for example: [String]s, [num]s, [bool]s, etc.).
-  void mutate(void Function(T) mutator) {
+  /// Mutate the state in place. A [mutator] must be provided.
+  void mutate(StateMutator<Value> mutator) {
     mutator(state);
-    _updateDependents();
+    ctx.notify(StateUpdate());
   }
 }
 
-/// Declare the given [data] as [State]ful.
-WritableState<T> state<T>([T? data]) => WritableState<T>(data);
+/// [State] with read only access.
+class ReadOnlyState<Value> implements State<Value> {
+  /// A handle to the [StateContext].
+  final StateContext<Value> ctx;
+
+  /// A composite of multiple composed states.
+  @protected
+  late final Composite<Value> composite;
+
+  /// Flag to indicate if state should be updated lazily.
+  @protected
+  final bool lazy;
+
+  /// Flag to determine to lifespan of this [ReadOnlyState].
+  ///
+  /// If it's local then the state will only last as long as the scope it was
+  /// defined in, otherwise it will last for as long as its parent states are
+  /// alive.
+  @protected
+  final bool local;
+
+  /// Event received from a parent state.
+  StateNotification? notification;
+
+  /// Callback function when state is accessed.
+  final OnAccess onAccess;
+
+  /// Callback function when state is notified.
+  final OnNotify onNotify;
+
+  /// [State] with read only access.
+  ///
+  /// Pass the [composite].
+  ReadOnlyState(
+    this.ctx,
+    this.composite, {
+    this.lazy = true,
+    this.local = true,
+    this.onAccess,
+    this.onNotify,
+    void Function()? onInit,
+    void Function()? onCreate,
+    void Function()? onDestroy,
+  }) {
+    if (onCreate != null) onCreate();
+
+    final StateReference self = switch (local) {
+      true => WeakStateReference(
+          state: this,
+          onDereference: onDestroy,
+        ),
+      false => StrongStateReference(
+          state: this,
+          onDereference: onDestroy,
+        ),
+    };
+
+    ctx.subscriber.push(self);
+    ctx.$.add(composite());
+    ctx.subscriber.pull();
+
+    if (onInit != null) onInit();
+  }
+
+  @protected
+  get state {
+    final onAccess = this.onAccess;
+
+    if (onAccess != null) onAccess(notification);
+
+    final currentSubscriber = ctx.subscriber.current;
+    if (currentSubscriber != null) ctx.addChild(currentSubscriber);
+
+    switch (notification) {
+      case StateUpdate():
+        ctx.$.add(composite());
+        notification = null;
+      case null:
+      case _:
+        null;
+    }
+
+    return ctx.$.value;
+  }
+
+  call() => state;
+
+  notify(StateNotification notification) {
+    final onNotify = this.onNotify;
+
+    if (lazy) {
+      this.notification = notification;
+      if (onNotify != null) onNotify(notification, ctx.$.value, lazy: true);
+      return;
+    }
+
+    ctx.$.add(composite());
+    this.notification = null;
+    if (onNotify != null) onNotify(notification, ctx.$.value, lazy: false);
+  }
+}
