@@ -1,7 +1,7 @@
 # rxs
 
-A simple reactive state management library with a minimal yet familiar API. The
-goals of this library are…
+Another simple reactive state management library for Dart and Flutter
+applications. The goals of this library are…
 
 - Be simple to learn
 - Be simple to use
@@ -9,16 +9,15 @@ goals of this library are…
 
 ## Prior Works
 
-This library would not have been made without the inspiration or otherwise from
-existing libraries/frameworks. Special thanks to
+This library would not have been made without the inspiration from existing
+libraries/frameworks.
 
 - [Solid.js](https://www.solidjs.com/) which has been used as a reference on
-the implementation of this library, and the biggest inspiration so far.
-- [Angular](https://angular.io/guide/signals) for providing the idea of using
-classes within this library's implementation of signals, and encouraged the
-usage of classes to take advantage of Dart's type system.
-- [S.js](https://github.com/adamhaile/S) which has provided extra inspiration
+the prior implementation of this library, and the biggest inspiration so far.
+- [Angular](https://angular.io/guide/signals) with the idea of using classes
 for the implementation of this library.
+- [Reactively](https://github.com/modderme123/reactively) for the idea of a
+hybrid push-pull system.
 
 ## Additional Information
 
